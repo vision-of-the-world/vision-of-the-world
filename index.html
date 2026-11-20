@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Vision of the World</title>
+  
+  <!-- Free AI libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #0f172a;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 1.7rem;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    #status {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+      min-height: 1.4em;
+    }
+    .camera-box {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    video, canvas {
+      width: 100%;
+      display: block;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      padding: 16px 28px;
+      font-size: 1.15rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      min-width: 150px;
+    }
+    #startBtn {
+      background: #2563eb;
+      color: white;
+    }
+    #startBtn:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+    #voiceBtn {
+      background: #10b981;
+      color: white;
+    }
+    #voiceBtn.off {
+      background: #ef4444;
+    }
+    #spoken {
+      margin-top: 18px;
+      font-size: 1.25rem;
+      color: #38bdf8;
+      text-align: center;
+      min-height: 1.5em;
+      font-weight: 500;
+    }
+    .disclaimer {
+      margin-top: 28px;
+      max-width: 480px;
+      font-size: 0.85rem;
+      color: #64748b;
+      text-align: center;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Vision of the World</h1>
+  <p id="status">Loading AI model… please wait</p>
+
+  <div class="camera-box">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn" disabled>Start Camera</button>
+    <button id="voiceBtn">Voice: ON</button>
+  </div>
+
+  <p id="spoken"></p>
+
+  <p class="disclaimer">
+    Assistive tool only. This is not a replacement for a white cane, guide dog, or professional mobility training. Always use with caution.
+  </p>
+
+  <script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const spokenEl = document.getElementById('spoken');
+
+    let model = null;
+    let voiceOn = true;
+    let lastSpoken = '';
+    let lastTime = 0;
+    let running = false;
+
+    // Load the free AI model
+    cocoSsd.load().then(loaded => {
+      model = loaded;
+      statusEl.textContent = 'AI Ready. Tap “Start Camera”';
+      startBtn.disabled = false;
+    }).catch(err => {
+      statusEl.textContent = 'Failed to load AI. Check your internet.';
+      console.error(err);
+    });
+
+    // Voice On/Off button
+    voiceBtn.addEventListener('click', () => {
+      voiceOn = !voiceOn;
+      voiceBtn.textContent = voiceOn ? 'Voice: ON' : 'Voice: OFF';
+      voiceBtn.classList.toggle('off', !voiceOn);
+      if (!voiceOn) speechSynthesis.cancel();
+    });
+
+    // Start Camera button
+    startBtn.addEventListener('click', async () => {
+      try {
